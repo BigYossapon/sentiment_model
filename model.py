@@ -39,6 +39,11 @@ def load_model(path):
     # โหลดโมเดลจากที่บันทึกไว้
     model = AutoModelForSequenceClassification.from_pretrained(path)
     tokenizer = AutoTokenizer.from_pretrained(path)
+
+    device = torch.device("mps" if torch.backends.mps.is_available() else 
+                      "cuda" if torch.cuda.is_available() else 
+                      "cpu")
+    model.to(device)
     return model,tokenizer
 
 def run_model(path_model):
@@ -307,12 +312,12 @@ if __name__ == "__main__":
     # train_model(path_model=path_model,path_csv=path_csv)
 
     # ถ้าต้องการใช้   
-    # use_model_for_sentiment(list_comment_for_sentiment)
+    use_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model=path_model)
 
     # ถ้าต้องการเทส accuracy
     # evaluate_sentiment(path_csv)
 
     #ถ้าต้องการเก็บโมเดลไง้ที่ hunging face 1.สมัคร 2.huggingface-cli login 3.ไปสร้าง model ไว้ 
-    upload_model_to_hub(path_model=path_model,model_name=model_name,username_hf=username_hf)
+    # upload_model_to_hub(path_model=path_model,model_name=model_name,username_hf=username_hf)
     # หมายเหตุถ้าเป็นคำ eng หมดจะถูกมองว่า neutral เนื่องจากไม่มีการเทรน eng เลย
 
