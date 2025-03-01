@@ -1,0 +1,14 @@
+torch
+transformers
+accelerate>=0.26.0
+datasets
+transformers[torch]
+torchvision
+torchaudio
+pythainlp
+sentencepiece
+pandas
+scikit-learn
+huggingface_hub
+# huggingface-cli login
+# pip install -r requirements.txt
