@@ -116,8 +116,8 @@ def train_model(path_model,path_csv):
 
     dataset = Dataset.from_dict(data)
     def tokenize_function(examples):
-        return tokenizer(examples['text'], padding="max_length", truncation=True ,max_length=128)
-
+        return tokenizer(examples['text'], padding="max_length", truncation=True ,max_length=512)
+    # max length ความยาวข้อความได้มากสุด 512 character
     dataset = Dataset.from_dict(data)
     tokenized_datasets = dataset.map(tokenize_function, batched=True)
 
@@ -153,7 +153,13 @@ def convert_to_polarity(probabilities):
 def polarity_calculate2(model,tokenizer,comment):
    
    
-    inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=128)
+    inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=512)
+    # max length ความยาวข้อความได้มากสุด 512 character
+    #     BERT-based models (เช่น Camembert, BERT, etc.): ปกติจะมีขีดจำกัดที่ 512 tokens. หากคุณตั้งค่า max_length มากกว่า 512, โมเดลจะไม่สามารถรองรับได้ และจะเกิดข้อผิดพลาด.
+
+    # GPT-based models (เช่น GPT-2, GPT-3, etc.): โมเดลบางตัวเช่น GPT-2 มีขีดจำกัดที่ 1024 tokens หรือ 2048 tokens, ขึ้นอยู่กับขนาดของเวอร์ชันโมเดล (เช่น GPT-2 small, medium, large).
+
+    # Longformer, BigBird (โมเดลสำหรับเอกสารยาว): โมเดลที่ออกแบบมาเพื่อจัดการกับเอกสารที่มีความยาวมาก ๆ (เช่น Longformer หรือ BigBird) สามารถรองรับความยาวได้มากกว่า 512 token (เช่น 4096 tokens หรือมากกว่านั้น).
     with torch.no_grad():
         outputs = model(**inputs)
 
