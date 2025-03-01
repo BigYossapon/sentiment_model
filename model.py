@@ -140,9 +140,44 @@ def train_model(path_model,path_csv):
 
     trainer.train()  # เริ่มการฝึกโมเดล
 
+def convert_to_polarity(probabilities):
+    """
+    แปลงค่า Probability จากโมเดล Sentiment Classification เป็น Polarity Score
+    """
+    return (
+        probabilities["Positive"] * 1.0 +  # Positive เป็น 1.0
+        probabilities["Neutral"] * 0.0 +   # Neutral เป็น 0.0
+        probabilities["Negative"] * -1.0   # Negative เป็น -1.0
+    )
+
+def polarity_calculate2(model,tokenizer,comment):
+   
+   
+    inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=128)
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # แปลง logits เป็น probability ด้วย softmax
+    probabilities = F.softmax(outputs.logits, dim=-1).squeeze().tolist()
+    
+    # ค่าความน่าจะเป็นของแต่ละคลาส
+    labels = ["Negative", "Neutral", "Positive"]
+    prob_dict = dict(zip(labels, probabilities))
+
+    # คำนวณค่า Polarity Score
+    polarity_score = convert_to_polarity(prob_dict)
+    print(f"probabilities: {prob_dict}\n"  
+        f"polarity_score: {polarity_score }"  )
+    return {
+        "probabilities": prob_dict,  # Probability ของแต่ละ class
+        "polarity_score": polarity_score  # ค่า Polarity Score
+    }
+
+
 def use_model_for_sentiment(list_comment,path_csv,path_model):
 
     model , tokenizer = load_model(path_model)
+    model.eval()
     classify_sequence = pipeline(task='sentiment-analysis',
             tokenizer=tokenizer,
             model=model)
@@ -156,6 +191,7 @@ def use_model_for_sentiment(list_comment,path_csv,path_model):
         # สมมติว่า logits คือผลลัพธ์ที่ได้จากการทำนายของโมเดล
         # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
         polarity_calculate(model,tokenizer=tokenizer,comment=comment)
+        polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
     
         
       
@@ -312,6 +348,7 @@ if __name__ == "__main__":
     # train_model(path_model=path_model,path_csv=path_csv)
 
     # ถ้าต้องการใช้   
+   
     use_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model=path_model)
 
     # ถ้าต้องการเทส accuracy
