@@ -150,9 +150,62 @@ def convert_to_polarity(probabilities):
         probabilities["Negative"] * -1.0   # Negative เป็น -1.0
     )
 
+def split_string(text:str, chunk_size=512):
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def polarity_calculate3(model,tokenizer,comment):
+    list_string = split_string(comment)
+
+    list_neg_score = []
+    list_pos_score = []
+    list_neu_score = []
+    list_polarity_score = []
+    for string in list_string :
+        inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=512)
+    # max length ความยาวข้อความได้มากสุด 512 character
+    #     BERT-based models (เช่น Camembert, BERT, etc.): ปกติจะมีขีดจำกัดที่ 512 tokens. หากคุณตั้งค่า max_length มากกว่า 512, โมเดลจะไม่สามารถรองรับได้ และจะเกิดข้อผิดพลาด.
+
+    # GPT-based models (เช่น GPT-2, GPT-3, etc.): โมเดลบางตัวเช่น GPT-2 มีขีดจำกัดที่ 1024 tokens หรือ 2048 tokens, ขึ้นอยู่กับขนาดของเวอร์ชันโมเดล (เช่น GPT-2 small, medium, large).
+
+    # Longformer, BigBird (โมเดลสำหรับเอกสารยาว): โมเดลที่ออกแบบมาเพื่อจัดการกับเอกสารที่มีความยาวมาก ๆ (เช่น Longformer หรือ BigBird) สามารถรองรับความยาวได้มากกว่า 512 token (เช่น 4096 tokens หรือมากกว่านั้น).
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        # แปลง logits เป็น probability ด้วย softmax
+        probabilities = F.softmax(outputs.logits, dim=-1).squeeze().tolist()
+        
+        # ค่าความน่าจะเป็นของแต่ละคลาส
+        labels = ["Negative", "Neutral", "Positive"]
+        prob_dict = dict(zip(labels, probabilities))
+
+        # คำนวณค่า Polarity Score
+        polarity_score = convert_to_polarity(prob_dict)
+
+        print(f"probabilities: {prob_dict}\n"  
+            f"polarity_score: {polarity_score }"  )
+        list_neg_score.append(prob_dict["Negative"])
+        list_neu_score.append(prob_dict["Neutral"])
+        list_pos_score.append(prob_dict["Positive"])
+
+        list_polarity_score.append(polarity_score)
+
+    score = {'Negative': sum(list_neg_score) / len(list_neg_score), 'Neutral': sum(list_neu_score) / len(list_neu_score), 'Positive': sum(list_pos_score) / len(list_pos_score)}
+    average = sum(list_polarity_score) / len(list_polarity_score)
+   
+
+        
+    return {
+            "probabilities": score,  # Probability ของแต่ละ class
+            "polarity_score": average  # ค่า Polarity Score
+        }
+
+
+
+
+
 def polarity_calculate2(model,tokenizer,comment):
-   
-   
+
+
     inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=512)
     # max length ความยาวข้อความได้มากสุด 512 character
     #     BERT-based models (เช่น Camembert, BERT, etc.): ปกติจะมีขีดจำกัดที่ 512 tokens. หากคุณตั้งค่า max_length มากกว่า 512, โมเดลจะไม่สามารถรองรับได้ และจะเกิดข้อผิดพลาด.
@@ -198,6 +251,7 @@ def use_model_for_sentiment(list_comment,path_csv,path_model):
         # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
         polarity_calculate(model,tokenizer=tokenizer,comment=comment)
         polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
+        polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
     
         
       
