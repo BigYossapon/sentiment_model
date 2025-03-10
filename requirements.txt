@@ -12,3 +12,6 @@ scikit-learn
 huggingface_hub
 # huggingface-cli login
 # pip install -r requirements.txt
+# pip install "numpy<2"
+# pip uninstall tensorflow
+# pip install tensorflow-macos

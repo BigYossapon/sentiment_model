@@ -1,13 +1,11 @@
 from transformers import (
-    CamembertTokenizer,
     AutoModelForSequenceClassification,
-    TFAutoModelForSequenceClassification,
     pipeline,
     AutoTokenizer,
     Trainer, 
     TrainingArguments
 )
-import os
+# import os
 import sys
 import torch
 import pandas as pd
@@ -40,10 +38,10 @@ def load_model(path):
     model = AutoModelForSequenceClassification.from_pretrained(path)
     tokenizer = AutoTokenizer.from_pretrained(path)
 
-    device = torch.device("mps" if torch.backends.mps.is_available() else 
-                      "cuda" if torch.cuda.is_available() else 
-                      "cpu")
-    model.to(device)
+    # device = torch.device("mps" if torch.backends.mps.is_available() else 
+    #                   "cuda" if torch.cuda.is_available() else 
+    #                   "cpu")
+    # model.to(device)
     return model,tokenizer
 
 def run_model(path_model):
@@ -141,9 +139,7 @@ def train_model(path_model,path_csv):
     trainer.train()  # เริ่มการฝึกโมเดล
 
 def convert_to_polarity(probabilities):
-    """
-    แปลงค่า Probability จากโมเดล Sentiment Classification เป็น Polarity Score
-    """
+   
     return (
         probabilities["Positive"] * 1.0 +  # Positive เป็น 1.0
         probabilities["Neutral"] * 0.0 +   # Neutral เป็น 0.0
@@ -203,7 +199,7 @@ def polarity_calculate3(model,tokenizer,comment):
 
 
 
-def polarity_calculate2(model,tokenizer,comment):
+def polarity_calculate2(model,tokenizer,comment,polarity):
 
 
     inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=512)
@@ -231,6 +227,41 @@ def polarity_calculate2(model,tokenizer,comment):
         "probabilities": prob_dict,  # Probability ของแต่ละ class
         "polarity_score": polarity_score  # ค่า Polarity Score
     }
+    
+def polarity_calculate_new(model,tokenizer,comment,polarity):
+
+
+    inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=512)
+    # max length ความยาวข้อความได้มากสุด 512 character
+    #     BERT-based models (เช่น Camembert, BERT, etc.): ปกติจะมีขีดจำกัดที่ 512 tokens. หากคุณตั้งค่า max_length มากกว่า 512, โมเดลจะไม่สามารถรองรับได้ และจะเกิดข้อผิดพลาด.
+
+    # GPT-based models (เช่น GPT-2, GPT-3, etc.): โมเดลบางตัวเช่น GPT-2 มีขีดจำกัดที่ 1024 tokens หรือ 2048 tokens, ขึ้นอยู่กับขนาดของเวอร์ชันโมเดล (เช่น GPT-2 small, medium, large).
+
+    # Longformer, BigBird (โมเดลสำหรับเอกสารยาว): โมเดลที่ออกแบบมาเพื่อจัดการกับเอกสารที่มีความยาวมาก ๆ (เช่น Longformer หรือ BigBird) สามารถรองรับความยาวได้มากกว่า 512 token (เช่น 4096 tokens หรือมากกว่านั้น).
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # แปลง logits เป็น probability ด้วย softmax
+    probabilities = F.softmax(outputs.logits, dim=-1).squeeze().tolist()
+    
+    # ค่าความน่าจะเป็นของแต่ละคลาส
+    labels = ["Negative", "Neutral", "Positive"]
+    prob_dict = dict(zip(labels, probabilities))
+
+    # คำนวณค่า Polarity Score
+    polarity_score = convert_to_polarity(prob_dict)
+    if polarity == "neg":
+        polarity_score = -abs(polarity_score)  # Always return the negative value
+    elif polarity == "pos":
+        polarity_score =  abs(polarity_score)  # Always return the positive value
+    
+
+    print(
+        f"polarity_score: {polarity_score }"  )
+    return {
+        "probabilities": prob_dict,  # Probability ของแต่ละ class
+        "polarity_score": polarity_score  # ค่า Polarity Score
+    }
 
 
 def use_model_for_sentiment(list_comment,path_csv,path_model):
@@ -246,12 +277,15 @@ def use_model_for_sentiment(list_comment,path_csv,path_model):
 
         processed_input_text = preprocess_text(comment)
         print('\n', processed_input_text, '\n')
-        print(classify_sequence(processed_input_text))
+        result =  classify_sequence(processed_input_text)
+        
+        print(result[0])
         # สมมติว่า logits คือผลลัพธ์ที่ได้จากการทำนายของโมเดล
         # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
-        polarity_calculate(model,tokenizer=tokenizer,comment=comment)
-        polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
-        polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
+        polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
     
         
       
@@ -402,6 +436,7 @@ if __name__ == "__main__":
     model_name = "SENTIMENT_TEST_FROM_WangchanBERTa"
 
     # ถ้ายังไม่มี model
+    # path สำหรับ save model
     # run_model(path_model)
 
     # ถ้าต้องการ train
