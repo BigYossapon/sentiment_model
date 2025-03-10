@@ -60,6 +60,25 @@ def run_model(path_model):
     #                                 'airesearch/wangchanberta-base-att-spm-uncased',
     #                                 revision='finetuned@wisesight_sentiment')                                
     save_model(model,tokenizer,path_model)
+    
+    
+def run_model_from_my_hf(path_model):
+        # Load pre-trained tokenizer
+        model_name = "BigYossapon/SENTIMENT_TEST_FROM_WangchanBERTa"
+        tokenizer = AutoTokenizer.from_pretrained(
+                                        model_name,
+                                        )
+        # tokenizer.additional_special_tokens = ['<s>NOTUSED', '</s>NOTUSED', '<_>']
+
+        # Load pre-trained model
+        model = AutoModelForSequenceClassification.from_pretrained(
+                                        model_name,
+                                        )
+
+        # model = TFAutoModelForSequenceClassification.from_pretrained(
+        #                                 'airesearch/wangchanberta-base-att-spm-uncased',
+        #                                 revision='finetuned@wisesight_sentiment')                                
+        save_model(model,tokenizer,path_model)
 
    
 
@@ -286,6 +305,29 @@ def use_model_for_sentiment(list_comment,path_csv,path_model):
         # polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
         # polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
         polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
+        
+def use_my_model_for_sentiment(list_comment,path_csv,path_model):
+
+    model , tokenizer = load_model(path_model)
+    model.eval()
+    classify_sequence = pipeline(task='sentiment-analysis',
+            tokenizer=tokenizer,
+            model=model)
+    # input_text = "บริษัทนี้ดูแล้วดีจริง อยากบอกต่อ"
+    # input_text = "กรรมการบริษัทชุดนี้บริหารงานกันแปลกๆ"
+    for comment in list_comment :
+
+        processed_input_text = preprocess_text(comment)
+        print('\n', processed_input_text, '\n')
+        result =  classify_sequence(processed_input_text)
+        
+        print(result[0])
+        # สมมติว่า logits คือผลลัพธ์ที่ได้จากการทำนายของโมเดล
+        # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
+        # polarity_calculate(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
+        polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
     
         
       
@@ -338,9 +380,9 @@ def polarity_calculate(model,tokenizer,comment):
           f"Polarity Score (Summed): {polarity_score_3}, "
           f"Polarity Score (Normalized): {polarity_score_4}")
 
-def evaluate_sentiment(csv_path):
+def evaluate_sentiment(model_path,csv_path):
     # โหลดโมเดล
-    model, tokenizer = load_model("./model_sentiment")
+    model, tokenizer = load_model(model_path)
     classify_sequence = pipeline(task='sentiment-analysis', tokenizer=tokenizer, model=model)
 
     # โหลดชุดข้อมูล CSV
@@ -431,10 +473,17 @@ if __name__ == "__main__":
         list_comment_for_sentiment = ["ผู้บริหารใจดี บริษัทดูมีอนาคต","ทรงหุ้นตัวนี้ดูแปลกๆ","ผมละเกลียดคนแบบนี้จริงๆ","ทำไมเขาถึงทำแบบนี้"]
         # python model.py "data" "delta" 
     path_model = "./model_sentiment"
-    path_csv = "./datasets/twitter_training.csv"
+    path_csv = "./datasets/data_test.csv"
     username_hf= "BigYossapon"
     model_name = "SENTIMENT_TEST_FROM_WangchanBERTa"
-
+    
+    
+    
+    
+    # run_model_from_my_hf("./my_model_hf")
+    # use_my_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model="./my_model_hf")
+    evaluate_sentiment(model_path="./my_model_hf",csv_path=path_csv)
+    
     # ถ้ายังไม่มี model
     # path สำหรับ save model
     # run_model(path_model)
@@ -444,10 +493,10 @@ if __name__ == "__main__":
 
     # ถ้าต้องการใช้   
    
-    use_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model=path_model)
+    # use_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model=path_model)
 
     # ถ้าต้องการเทส accuracy
-    # evaluate_sentiment(path_csv)
+    evaluate_sentiment(model_path=path_model,csv_path=path_csv)
 
     #ถ้าต้องการเก็บโมเดลไง้ที่ hunging face 1.สมัคร 2.huggingface-cli login 3.ไปสร้าง model ไว้ 
     # upload_model_to_hub(path_model=path_model,model_name=model_name,username_hf=username_hf)
