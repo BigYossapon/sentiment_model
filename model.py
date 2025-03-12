@@ -15,7 +15,12 @@ from sklearn.metrics import accuracy_score, classification_report
 
 
 # from transformers import TFAutoModelForSequenceClassification
-from pythainlp.tokenize import word_tokenize
+from pythainlp.tokenize import (
+    word_tokenize,
+    
+    
+)
+
 # from thai2transformers.preprocess import process_transformers
 from datasets import Dataset
 
@@ -160,23 +165,29 @@ def train_model(path_model,path_csv):
 def convert_to_polarity(probabilities):
    
     return (
-        probabilities["Positive"] * 1.0 +  # Positive เป็น 1.0
+       
         probabilities["Neutral"] * 0.0 +   # Neutral เป็น 0.0
-        probabilities["Negative"] * -1.0   # Negative เป็น -1.0
+        probabilities["Negative"] * 1.0 -  # Negative เป็น -1.0
+        probabilities["Positive"] * 1.0  # Positive เป็น 1.0
     )
 
 def split_string(text:str, chunk_size=512):
+    
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
-def polarity_calculate3(model,tokenizer,comment):
+def polarity_calculate_for_list(model,tokenizer,comment,result):
     list_string = split_string(comment)
-
+    magnitude_avg = 0
+    magnitude = 0
+    for res in result :
+        magnitude += res[0]["score"] 
+    magnitude_avg = magnitude / len(result)
     list_neg_score = []
     list_pos_score = []
     list_neu_score = []
     list_polarity_score = []
     for string in list_string :
-        inputs = tokenizer(comment, return_tensors="pt", padding=True, truncation=True,max_length=512)
+        inputs = tokenizer(string, return_tensors="pt", padding=True, truncation=True,max_length=512)
     # max length ความยาวข้อความได้มากสุด 512 character
     #     BERT-based models (เช่น Camembert, BERT, etc.): ปกติจะมีขีดจำกัดที่ 512 tokens. หากคุณตั้งค่า max_length มากกว่า 512, โมเดลจะไม่สามารถรองรับได้ และจะเกิดข้อผิดพลาด.
 
@@ -206,12 +217,44 @@ def polarity_calculate3(model,tokenizer,comment):
 
     score = {'Negative': sum(list_neg_score) / len(list_neg_score), 'Neutral': sum(list_neu_score) / len(list_neu_score), 'Positive': sum(list_pos_score) / len(list_pos_score)}
     average = sum(list_polarity_score) / len(list_polarity_score)
-   
+    polarity = ""
+    if len(list_string)>1:
+        if average > 0.5:
+            polarity = "Positive"
+            average = abs(average)
+        elif average < -0.5:
+            polarity = "Negative"
+            average = -abs(average)
+        else:
+            average = abs(average)
+            polarity = "Neutral"
+    else:
+        if result[0][0]["label"] == "pos":
+            polarity = "Positive"
+            average = abs(average)
+        elif result[0][0]["label"] == "neg":
+            polarity = "Negative"
+            average = -abs(average)
+        else: 
+            polarity = "Neutral"
+            average = abs(average)
 
         
-    return {
+    # print(result)
+    # print("===============")
+    print({
+            "text" : list_string,
+            "magnitude" : magnitude_avg,
             "probabilities": score,  # Probability ของแต่ละ class
-            "polarity_score": average  # ค่า Polarity Score
+            "polarity_score": average,  # ค่า Polarity Score
+            "polarity" : polarity
+        })
+    return {
+            "text" : list_string,
+            "magnitude" : magnitude_avg,
+            "probabilities": score,  # Probability ของแต่ละ class
+            "polarity_score": average,  # ค่า Polarity Score
+            "polarity" : polarity
         }
 
 
@@ -303,9 +346,39 @@ def use_model_for_sentiment(list_comment,path_csv,path_model):
         # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
         # polarity_calculate(model,tokenizer=tokenizer,comment=comment)
         # polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
-        # polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
+        polarity_calculate_for_list(model,tokenizer=tokenizer,comment=comment)
         polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
         
+def use_my_model_for_sentiment_new(list_comment,path_csv,path_model):
+
+    model , tokenizer = load_model(path_model)
+    model.eval()
+    classify_sequence = pipeline(task='sentiment-analysis',
+            tokenizer=tokenizer,
+            model=model)
+    # input_text = "บริษัทนี้ดูแล้วดีจริง อยากบอกต่อ"
+    # input_text = "กรรมการบริษัทชุดนี้บริหารงานกันแปลกๆ"
+    for comment in list_comment :
+        list_string = split_string(comment)
+        print("=====================")
+        print(list_string)
+        result = []
+        for string in list_string:
+            
+            processed_input_text = preprocess_text(string)
+            # print('\n', processed_input_text, '\n')
+            
+            result.append(classify_sequence(processed_input_text))
+            # print(result)
+        # print(result[0])
+        # สมมติว่า logits คือผลลัพธ์ที่ได้จากการทำนายของโมเดล
+        # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
+        # polarity_calculate(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
+        # polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
+        polarity_calculate_for_list(model,tokenizer=tokenizer,comment=comment,result=result)
+        # polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
+    
 def use_my_model_for_sentiment(list_comment,path_csv,path_model):
 
     model , tokenizer = load_model(path_model)
@@ -316,20 +389,22 @@ def use_my_model_for_sentiment(list_comment,path_csv,path_model):
     # input_text = "บริษัทนี้ดูแล้วดีจริง อยากบอกต่อ"
     # input_text = "กรรมการบริษัทชุดนี้บริหารงานกันแปลกๆ"
     for comment in list_comment :
-
+        list_string = split_string(comment)
+        # result = []
+        # for string in list_string:
+            
         processed_input_text = preprocess_text(comment)
-        print('\n', processed_input_text, '\n')
+        # print('\n', processed_input_text, '\n')
         result =  classify_sequence(processed_input_text)
-        
-        print(result[0])
+    
+        # print(result[0])
         # สมมติว่า logits คือผลลัพธ์ที่ได้จากการทำนายของโมเดล
         # สมมุติว่าคุณมีโมเดลและ tokenizer ที่โหลดไว้แล้ว
         # polarity_calculate(model,tokenizer=tokenizer,comment=comment)
         # polarity_calculate2(model,tokenizer=tokenizer,comment=comment)
         # polarity_calculate3(model,tokenizer=tokenizer,comment=comment)
-        polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
-    
-        
+        polarity_calculate_for_list(model,tokenizer=tokenizer,comment=comment,magnitude=result[0]['label'])
+        # polarity_calculate_new(model,tokenizer=tokenizer,comment=comment,polarity=result[0]['label'])
       
   
 
@@ -470,21 +545,18 @@ if __name__ == "__main__":
         print(sys.argv[1:])
         list_comment_for_sentiment = sys.argv[1:]
     else :
-        list_comment_for_sentiment = ["ผู้บริหารใจดี บริษัทดูมีอนาคต","ทรงหุ้นตัวนี้ดูแปลกๆ","ผมละเกลียดคนแบบนี้จริงๆ","ทำไมเขาถึงทำแบบนี้"]
+        list_comment_for_sentiment = ["ในโลกปัจจุบันที่เทคโนโลยีและอินเทอร์เน็ตเข้ามามีบทบาทสำคัญในชีวิตประจำวันของเรา การสื่อสารผ่านช่องทางดิจิทัลได้กลายเป็นสิ่งที่ขาดไม่ได้ ไม่ว่าจะเป็นการส่งข้อความ การโทรผ่านวิดีโอคอล หรือแม้แต่การประชุมออนไลน์ที่ช่วยให้เราสามารถติดต่อสื่อสารกันได้อย่างสะดวกสบายโดยไม่ต้องเดินทาง เทคโนโลยีสารสนเทศได้เปลี่ยนแปลงวิธีการดำเนินชีวิตของผู้คนไปอย่างสิ้นเชิง ธุรกิจหลายแห่งหันมาใช้แพลตฟอร์มออนไลน์ในการให้บริการลูกค้า ไม่ว่าจะเป็นการขายสินค้า การให้คำปรึกษาทางไกล หรือแม้กระทั่งการเรียนการสอนออนไลน์ที่ได้รับความนิยมเพิ่มขึ้นเป็นอย่างมาก โดยเฉพาะในช่วงที่เกิดสถานการณ์โรคระบาดที่ทำให้การเดินทางและการพบปะสังสรรค์ในสถานที่สาธารณะถูกจำกัด ความสะดวกสบายที่เทคโนโลยีมอบให้ยังช่วยลดข้อจำกัดด้านระยะทางและเวลา ทำให้ผู้คนสามารถเข้าถึงข้อมูลข่าวสาร ความรู้ และบริการต่าง ๆ ได้จากทุกที่ทั่วโลก นอกจากนี้ การใช้เทคโนโลยีอย่างมีประสิทธิภาพยังสามารถช่วยให้ธุรกิจเติบโตได้อย่างรวดเร็วและเพิ่มโอกาสในการแข่งขันในตลาดโลก อย่างไรก็ตาม การพึ่งพาเทคโนโลยีมากเกินไปก็อาจนำไปสู่ปัญหาต่าง ๆ เช่น ความปลอดภัยของข้อมูล การละเมิดสิทธิส่วนบุคคล และการเสพติดสื่อออนไลน์ ดังนั้น การใช้เทคโนโลยีอย่างมีสติและความรับผิดชอบจึงเป็นสิ่งสำคัญที่ทุกคนควรตระหนัก","ทรงหุ้นตัวนี้ดูแปลกๆ","ผมละเกลียดคนแบบนี้จริงๆ","ทำไมเขาถึงทำแบบนี้","รถไฟฉึกฉึกฉึกฉักฉักฉัก","แย่มากๆ"]
         # python model.py "data" "delta" 
     path_model = "./model_sentiment"
     path_csv = "./datasets/data_test.csv"
     username_hf= "BigYossapon"
     model_name = "SENTIMENT_TEST_FROM_WangchanBERTa"
-    
-    
-    
-    
+    # ทดสอบ
     # run_model_from_my_hf("./my_model_hf")
-    # use_my_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model="./my_model_hf")
-    evaluate_sentiment(model_path="./my_model_hf",csv_path=path_csv)
+    use_my_model_for_sentiment_new(list_comment_for_sentiment,path_csv=path_csv,path_model="./my_model_hf")
+    # evaluate_sentiment(model_path="./my_model_hf",csv_path=path_csv)
     
-    # ถ้ายังไม่มี model
+    # 1 ถ้ายังไม่มี model
     # path สำหรับ save model
     # run_model(path_model)
 
@@ -492,11 +564,10 @@ if __name__ == "__main__":
     # train_model(path_model=path_model,path_csv=path_csv)
 
     # ถ้าต้องการใช้   
-   
     # use_model_for_sentiment(list_comment_for_sentiment,path_csv=path_csv,path_model=path_model)
 
     # ถ้าต้องการเทส accuracy
-    evaluate_sentiment(model_path=path_model,csv_path=path_csv)
+    # evaluate_sentiment(model_path=path_model,csv_path=path_csv)
 
     #ถ้าต้องการเก็บโมเดลไง้ที่ hunging face 1.สมัคร 2.huggingface-cli login 3.ไปสร้าง model ไว้ 
     # upload_model_to_hub(path_model=path_model,model_name=model_name,username_hf=username_hf)
