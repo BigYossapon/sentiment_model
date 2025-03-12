@@ -5,21 +5,25 @@ from transformers import (
     Trainer, 
     TrainingArguments
 )
-# import os
+import emoji
 import sys
+import re
 import torch
+from pythainlp.spell import spell
 import pandas as pd
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, classification_report
-
+import pandas as pd
+from pythainlp.tokenize import word_tokenize
+from pythainlp.spell import correct
+from pythainlp.util import emoji_to_thai, normalize
+from pythainlp.corpus import thai_stopwords
+from pythainlp.spell import NorvigSpellChecker
+# from spellchecker import SpellChecker
 
 
 # from transformers import TFAutoModelForSequenceClassification
-from pythainlp.tokenize import (
-    word_tokenize,
-    
-    
-)
+
 
 # from thai2transformers.preprocess import process_transformers
 from datasets import Dataset
@@ -535,6 +539,49 @@ def upload_model_to_hub(path_model,username_hf,model_name):
     model.push_to_hub(repo_name)
     tokenizer.push_to_hub(repo_name)
 
+stopword_list = frozenset(thai_stopwords())
+
+def clean_text(text):
+    # text = text.lower()  # แปลงเป็นตัวพิมพ์เล็ก
+    text = emoji.replace_emoji(text, replace="")  # ลบอีโมจิ
+    # text = re.sub(r"http[s]?://\S+", "", text)  # ลบ URL
+    # text = re.sub(r"\d+", "", text)  # ลบตัวเลข
+ # ทำให้รูปแบบข้อความเป็นมาตรฐาน
+    text = re.sub(r"[^\w\s]", "", text)  # ลบอักขระพิเศษ
+    text = re.sub(r"(.)\1{2,}", r"\1", text)
+    # # ลดอักขระที่ซ้ำกันเกิน 2 ตัว เช่น "ดีมากกกก" -> "ดีมาก"
+    text = normalize(text) 
+    
+    checker = NorvigSpellChecker()
+    # ตัดคำ
+    words =  spell(text)
+    # words = word_tokenize(text)
+
+    # # แก้คำผิด
+    corrected_words = []
+    for word in words:
+        if word in ["พ่อแม่", "พี่น้อง"]:  # ข้อยกเว้นไม่ต้องแก้คำ
+            corrected_words.append(word)
+        else:
+            corrected = checker.correct(word=word) # spell() อาจให้คำแนะนำหลายตัวเลือก
+            corrected_words.append(corrected if corrected else word)  # ใช้ตัวเลือกแรกถ้ามี
+
+    # ลบคำฟุ่มเฟือย (Stopwords)
+    # filtered_words = [w for w in words if w not in stopword_list]
+
+    return " ".join(corrected_words)
+
+def clean_text_csv(csv_path_to_clean:str):
+     # โหลดไฟล์ CSV
+    df = pd.read_csv(csv_path_to_clean)
+    
+    # ใช้ฟังก์ชัน clean_text กับคอลัมน์ข้อความ
+    df["clean_text"] = df["text"].apply(clean_text)
+
+    # บันทึกผลลัพธ์ลงไฟล์ใหม่
+    df.to_csv(csv_path_to_clean, index=False, encoding="utf-8-sig")
+    
+
 
 def tokenize_function(tokenizer,examples):
     return tokenizer(examples['text'], padding="max_length", truncation=True)
@@ -553,8 +600,9 @@ if __name__ == "__main__":
     model_name = "SENTIMENT_TEST_FROM_WangchanBERTa"
     # ทดสอบ
     # run_model_from_my_hf("./my_model_hf")
-    use_my_model_for_sentiment_new(list_comment_for_sentiment,path_csv=path_csv,path_model="./my_model_hf")
+    # use_my_model_for_sentiment_new(list_comment_for_sentiment,path_csv=path_csv,path_model="./my_model_hf")
     # evaluate_sentiment(model_path="./my_model_hf",csv_path=path_csv)
+    clean_text_csv("./datasets/data_for_clean_test.csv")
     
     # 1 ถ้ายังไม่มี model
     # path สำหรับ save model
