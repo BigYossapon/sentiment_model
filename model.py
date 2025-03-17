@@ -20,6 +20,7 @@ from pythainlp.util import emoji_to_thai, normalize
 from pythainlp.corpus import thai_stopwords
 from pythainlp.spell import NorvigSpellChecker
 from datasets import Dataset
+from huggingface_hub import get_safetensors_metadata
 
 def preprocess_text(text):
     """ ใช้ word_tokenize เพื่อแยกคำก่อนนำเข้าโมเดล """
@@ -464,6 +465,14 @@ def clean_text_csv(csv_path_to_clean:str):
     df = pd.read_csv(csv_path_to_clean)
     df["clean_text"] = df["text"].apply(clean_text)
     df.to_csv(csv_path_to_clean, index=False, encoding="utf-8-sig")
+    
+def check_memory_required(model_id = ""):
+    dtype_bytes =  {"F32":4,"F16":2,"BF16":2,"FB":1}
+    
+    metadata = get_safetensors_metadata(model_id)
+    memory = (sum(count * dtype_bytes[key.split("_")[0]] for key ,count in metadata.parameter_count.items())/(1024**3)*1.18)
+    
+    print(f"{model_id=} requires {memory=}GB")
     
 def tokenize_function(tokenizer,examples):
     return tokenizer(examples['text'], padding="max_length", truncation=True)
